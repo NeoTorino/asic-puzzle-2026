@@ -1,0 +1,53 @@
+klayout -b -r ./sky130_klayout_pdk/tech/sky130/lvs/sky130.lvs -rd input=asic-puzzle-2026/puzzle.gds -rd target_netlist=puzzle2.cir -rd run_mode=ext
+
+
+# Skywaters 130nm Klayout PDK
+https://github.com/efabless/sky130_klayout_pdk.git
+
+
+# Open source process design kit for usage with SkyWater Technology Foundry's 130nm node.
+https://github.com/google/skywater-pdk.git
+git submodule update --init --depth 1 libraries/sky130_fd_sc_hd/latest
+
+# ##########
+# SKY130 behavioral Verilog models: sourced via a sparse submodule checkout of skywater-pdk, flattened all needed cell files (65 cell types) into one directory (sky130_flat) to avoid nested-include path issues, including the shared UDP primitive files from the models/ directory, with relative-path includes patched to bare filenames.
+# Compilation: after resolving a long sequence of Icarus Verilog issues (module name collisions from stray .symbol.v/.tb.v/.blackbox.v files, missing includes, non-existent ports), achieved a clean, zero-error compile of the full 1618-instance gate-level netlist.
+# Functional vs. behavioral models: switched to -DFUNCTIONAL mode (simpler procedural logic models instead of UDP/timing-table-based ones), which was the fix that got flip-flops actually producing defined 0/1 values instead of perpetual x.
+# Smoke test passed: a basic testbench (tb_smoke.v) driving clk/rst_n/enable/I now shows success and O resolving to real logic values (success=0, O=00000000) rather than unknowns — confirming the simulation is functioning correctly end-to-end.
+# ##########
+cd ~/github/janestreet_puzzle/tools/sky130_flat
+find . -maxdepth 1 -name "*.behavioral.v" -delete
+sed -i -E 's#`include "\.\./\.\./models/[^/]+/([^"]+)"#`include "\1"#' *.v
+grep -l "models/" *.v
+ls | wc -l
+
+iverilog -DFUNCTIONAL -o smoke_sim.vvp -I sky130_flat tb_smoke.v puzzle_gl.v sky130_flat/*.v
+vvp smoke_sim.vvp
+
+#######################
+iverilog -o sim.vvp puzzle_logic.v tb_simulation.v
+
+vvp sim.vvp +seed=1 +timestamp=$(date +%Y%m%d_%H%M%S)
+vvp sim.vvp +seed=2 +timestamp=$(date +%Y%m%d_%H%M%S)
+vvp sim.vvp +seed=3 +timestamp=$(date +%Y%m%d_%H%M%S)
+vvp sim.vvp +seed=4 +timestamp=$(date +%Y%m%d_%H%M%S)
+
+ps aux | grep 'vvp sim' | grep -v grep | awk '{print $2}' | xargs kill -15
+
+# 100K reproducible trials, waveform capped to first 50 trials
+vvp sim.vvp +max_trials=100000 +seed=42 +dump +dump_trials=50
+
+# unlimited run, no waveform
+vvp sim.vvp +seed=42
+
+# unlimited waveform (careful - can get huge)
+vvp sim.vvp +dump
+#######################
+
+
+s1 = 0010101000000010110000101001100000000010000001110110000100101100001110011000000010110000001011100000000010000011001110000;
+s2 = 1101011000010011110000000001000001000011000011101110000100001100001001011000000101110000110011100000000010000000000100000;
+
+
+s1 = 00 1010 10000 0 001 0 110000 1 0 1 001 1 0000 0 0000 10 0000 0 11 10 110000100 1 01100001110 011000000 010 110000 001 0111000000000100000 11 00 1 1 1 0000;
+s2 = 11 0101 10000 1 001 1 110000 0 0 0 001 0 0000 1 0000 11 0000 1 11 01 110000100 0 01100001001 011000000 101 110000 110 0111000000000100000 00 00 0 1 0 0000;

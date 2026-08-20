@@ -1,0 +1,105 @@
+<div id="cy" style="width: 100%; height: 800px;"></div>
+
+<script src="https://unpkg.com/cytoscape@3/dist/cytoscape.min.js"></script>
+<script src="https://unpkg.com/dagre@0.8/dist/dagre.min.js"></script>
+<script src="https://unpkg.com/cytoscape-dagre@2/cytoscape-dagre.js"></script>
+
+<script>
+fetch("./verilog_trace/output/success_reduced_graph.json")
+  .then(r => r.json())
+  .then(graph => {
+    const elements = [
+      ...graph.nodes.map(n => ({ data: n })),
+      ...graph.edges.map(e => ({ data: e }))
+    ];
+
+    const cy = cytoscape({
+      container: document.getElementById("cy"),
+      elements,
+      style: [
+  // base node style
+  { selector: "node", style: {
+      "label": "data(label)",
+      "font-size": 9,
+      "text-valign": "center",
+      "color": "#fff",
+      "text-outline-width": 1,
+      "text-outline-color": "#000"
+  }},
+
+  // ── combinational logic — muted, background of the picture ──
+  { selector: 'node[kind = "comb"]', style: {
+      "background-color": "#5b7fa6",
+      "shape": "ellipse",
+      "width": 22, "height": 22
+  }},
+
+  // ── flip-flops — the sequential elements ──
+  { selector: 'node[kind = "flipflop"]', style: {
+      "background-color": "#d97b29",
+      "shape": "round-rectangle",
+      "width": 30, "height": 26
+  }},
+
+  // ── data inputs — things you control ──
+  { selector: 'node[kind = "input"]', style: {
+      "background-color": "#3ba55c",
+      "shape": "diamond",
+      "width": 26, "height": 26,
+      "border-width": 2,
+      "border-color": "#1f6b37"
+  }},
+
+        // ── clock / reset — control inputs, distinct from data inputs ──
+        { selector: 'node[kind = "clock"]', style: {
+            "background-color": "#9b59b6",
+            "shape": "hexagon"
+        }},
+        { selector: 'node[kind = "reset"]', style: {
+            "background-color": "#c0392b",
+            "shape": "hexagon"
+        }},
+
+        // ── success — the one node that matters most ──
+        { selector: '#success', style: {
+            "background-color": "#ffd11a",
+            "border-width": 4,
+            "border-color": "#b38f00",
+            "width": 46, "height": 40,
+            "font-size": 13,
+            "font-weight": "bold",
+            "color": "#000",
+            "text-outline-width": 0,
+            "z-index": 999
+        }},
+
+        // ── if you add O[0..7] as outputs, style them as a family ──
+        { selector: 'node[id ^= "O["]', style: {
+            "background-color": "#e67e22",
+            "shape": "round-diamond",
+            "border-width": 2,
+            "border-color": "#a85400"
+        }},
+
+        { selector: "edge", style: {
+            "curve-style": "bezier",
+            "target-arrow-shape": "triangle",
+            "width": 1,
+            "line-color": "#999",
+            "target-arrow-color": "#999"
+        }}
+      ],
+      layout: { name: "dagre", rankDir: "LR" }
+    });
+
+    // The bit that actually solves your problem: isolate everything
+    // "success" depends on.
+    const target = cy.$('#success');
+    const cone = target.predecessors().union(target);
+    cone.addClass("highlighted");
+
+    // Optional: hide everything outside the cone so you're not
+    // scrolling through the whole chip.
+    cy.elements().not(cone).style("display", "none");
+  });
+</script>
